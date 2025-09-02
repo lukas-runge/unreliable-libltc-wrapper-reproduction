@@ -4,11 +4,14 @@ const { RtAudio } = audify;
 import { LTCDecoder } from "libltc-wrapper";
 
 import { usePlattformSpecific } from "./use-plattform-specific.mjs";
+import { createWriteStream } from "fs";
 
 const sampleRate = 48000;
 const frameRate = 30;
 
 const ltcDecoder = new LTCDecoder(sampleRate, frameRate, "s16");
+
+const pcmFile = createWriteStream("./output.pcm");
 
 const audioInput = new RtAudio(
   usePlattformSpecific({
@@ -33,9 +36,10 @@ audioInput.openStream(
   2,
   sampleRate,
   120,
-  "MyStream 2",
+  "MyStream",
   (pcm) => {
     ltcDecoder.write(pcm);
+    pcmFile.write(pcm);
 
     while (true) {
       const frame = ltcDecoder.read();
