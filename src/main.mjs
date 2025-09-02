@@ -1,9 +1,7 @@
-import audify from "audify";
-const { RtAudio } = audify;
+import { getDevices, AudioIO, SampleFormat16Bit } from "naudiodon-neo";
 
 import { LTCDecoder } from "libltc-wrapper";
 
-import { usePlattformSpecific } from "./use-plattform-specific.mjs";
 import { createWriteStream } from "fs";
 
 const sampleRate = 48000;
@@ -13,55 +11,37 @@ const ltcDecoder = new LTCDecoder(sampleRate, frameRate, "s16");
 
 const pcmFile = createWriteStream("./output.pcm");
 
-const audioInput = new RtAudio(
-  usePlattformSpecific({
-    linux: 2,
-    mac: 1,
-    windows: 7,
-    default: undefined,
-  })
-);
+const device = getDevices().find((d) => d.name.includes("USB Audio"));
 
-const device = audioInput
-  .getDevices()
-  .find((d) => d.name.includes("USB Audio"));
+if (!device) {
+  console.error("No suitable audio device found.");
+  process.exit(1);
+}
 
-audioInput.openStream(
-  null,
-  {
+console.log(device);
+
+const audioInput = new AudioIO({
+  inOptions: {
+    channelCount: 1,
+    sampleFormat: SampleFormat16Bit,
+    sampleRate: sampleRate,
     deviceId: device?.id,
-    nChannels: 1,
-    firstChannel: 0,
-  },
-  2,
-  sampleRate,
-  120,
-  "MyStream",
-  (pcm) => {
-    ltcDecoder.write(pcm);
+    closeOnError: true,
+    highwaterMark: 32,
+  }
+});
+
+audioInput.on("data", (pcm) => {
+  ltcDecoder.write(pcm);
     pcmFile.write(pcm);
 
-    while (true) {
+    while (true) { 
       const frame = ltcDecoder.read();
       if (frame) console.log(frame);
       else break;
     }
-  },
-  null,
-  0x2,
-  (error, message) => {
-    console.log(`${error}: ${message}`);
-  }
-);
+});
 
 audioInput.start();
-
-setTimeout(() => {
-  try {
-    audioInput.write(null);
-  } catch {
-    console.log("RTAudio fixed, enjoy your stream.");
-  }
-});
 
 console.log(`${device?.name}`);
